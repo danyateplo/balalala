@@ -7,10 +7,9 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(cors());
 
-// Берем ключ из переменных окружения Render
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY);
 
-// Отдаем интерфейс прямо из корня
+// Раздаем index.html из корня
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -29,9 +28,10 @@ app.post('/api/chat', async (req, res) => {
         const result = await chat.sendMessage(content);
         res.json({ text: result.response.text() });
     } catch (e) {
-        res.status(500).json({ error: "Ошибка Gemini API" });
+        console.error(e);
+        res.status(500).json({ error: "API Error" });
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Слушаю порт ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on ${PORT}`));
