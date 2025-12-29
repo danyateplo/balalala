@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Gemini Dark Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #050505;
+            --card-bg: #1c1c1e;
+            --ios-blue: #0A84FF;
+            --text-main: #ffffff;
+            --text-secondary: #8e8e93;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .ios-blur {
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            background: rgba(18, 18, 18, 0.8);
+        }
+
+        .bubble {
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 20px;
+            font-size: 16px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .user {
+            background: var(--ios-blue);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .bot {
+            background: var(--card-bg);
+            color: #e5e5e7;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        /* Стили для кода внутри ответов */
+        pre {
+            background: #000 !important;
+            padding: 10px;
+            border-radius: 10px;
+            margin: 8px 0;
+            overflow-x: auto;
+        }
+        code { font-family: 'Fira Code', monospace; font-size: 14px; }
+
+        .loading-dots span {
+            animation: blink 1.4s infinite both;
+            height: 6px; width: 6px; background: var(--text-secondary);
+            display: inline-block; border-radius: 50%; margin: 0 2px;
+        }
+        .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <header class="ios-blur fixed top-0 w-full z-20 border-b border-white/10 px-4 pt-10 pb-3">
+        <div class="flex justify-between items-center max-w-2xl mx-auto">
+            <button onclick="clearHistory()" class="text-[#0A84FF] font-medium">Clear</button>
+            <span class="font-bold text-white">Gemini Pro</span>
+            <div class="w-10"></div>
+        </div>
+    </header>
+
+    <main id="chat-container" class="flex-1 overflow-y-auto p-4 pt-28 pb-32 flex flex-col space-y-4 scroll-smooth"></main>
+
+    <footer class="ios-blur fixed bottom-0 w-full p-3 border-t border-white/10 pb-8">
+        <div class="max-w-2xl mx-auto flex items-end space-x-2">
+            <label class="p-2 mb-1 cursor-pointer hover:opacity-70 transition">
+                <input type="file" id="file-input" class="hidden" accept="image/*" onchange="previewImage(this)">
+                <svg class="w-7 h-7 text-[#0A84FF]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            </label>
+            
+            <div class="flex-1 bg-[#2c2c2e] rounded-2xl p-2 border border-white/5">
+                <div id="preview-box" class="hidden relative inline-block mb-2">
+                    <img id="img-preview" class="h-20 w-20 object-cover rounded-lg">
+                    <button onclick="removeImage()" class="absolute -top-2 -right-2 bg-red-500 rounded-full text-white p-1 text-xs">✕</button>
+                </div>
+                <textarea id="msg-input" rows="1" class="w-full bg-transparent text-white px-2 py-1 outline-none resize-none text-[17px]" placeholder="Ask Gemini..."></textarea>
+            </div>
+
+            <button onclick="send()" class="bg-[#0A84FF] p-3 rounded-full mb-1 hover:scale-105 active:scale-95 transition">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.backgroundColor = '#050505';
+        tg.headerColor = '#121212';
+
+        let chatHistory = JSON.parse(localStorage.getItem('gemini_dark_history') || '[]');
+        let currentImage = null;
+
+        function previewImage(input) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                currentImage = e.target.result;
+                document.getElementById('img-preview').src = currentImage;
+                document.getElementById('preview-box').classList.remove('hidden');
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+
+        function removeImage() {
+            currentImage = null;
+            document.getElementById('preview-box').classList.add('hidden');
+        }
+
+        async function send() {
+            const input = document.getElementById('msg-input');
+            const text = input.value.trim();
+            if(!text && !currentImage) return;
+
+            addBubble(text, true, currentImage);
+            input.value = '';
+            const tempImg = currentImage;
+            removeImage();
+
+            // Индикатор загрузки
+            const loadingId = addLoading();
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        message: text,
+                        image: tempImg,
+                        history: chatHistory.map(h => ({role: h.role, parts: [{text: h.text}]}))
+                    })
+                });
+                const data = await res.json();
+                
+                removeLoading(loadingId);
+                addBubble(data.text, false);
+                
+                chatHistory.push({ role: 'user', text });
+                chatHistory.push({ role: 'model', text: data.text });
+                localStorage.setItem('gemini_dark_history', JSON.stringify(chatHistory.slice(-20))); // Храним последние 20 сообщений
+            } catch (e) {
+                removeLoading(loadingId);
+                addBubble("Service unavailable. Check your Render logs.", false);
+            }
+        }
+
+        function addBubble(text, isUser, img = null) {
+            const container = document.getElementById('chat-container');
+            const div = document.createElement('div');
+            div.className = `bubble ${isUser ? 'user' : 'bot'}`;
+            
+            if(img) div.innerHTML += `<img src="${img}" class="rounded-lg mb-2 max-w-full border border-white/10">`;
+            
+            // Обработка Markdown для бота
+            if(!isUser) {
+                div.innerHTML += `<div class="markdown-content">${marked.parse(text)}</div>`;
+            } else {
+                div.innerHTML += `<span>${text}</span>`;
+            }
+
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            
+            // Подсветка кода
+            div.querySelectorAll('pre code').forEach((el) => hljs.highlightElement(el));
+        }
+
+        function addLoading() {
+            const id = Date.now();
+            const container = document.getElementById('chat-container');
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = 'bubble bot loading-dots';
+            div.innerHTML = '<span></span><span></span><span></span>';
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            return id;
+        }
+
+        function removeLoading(id) {
+            const el = document.getElementById(id);
+            if(el) el.remove();
+        }
+
+        function clearHistory() {
+            localStorage.removeItem('gemini_dark_history');
+            chatHistory = [];
+            document.getElementById('chat-container').innerHTML = '';
+        }
+
+        // Загрузка истории при старте
+        chatHistory.forEach(msg => addBubble(msg.text, msg.role === 'user'));
+    </script>
+</body>
+</html>
