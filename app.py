@@ -8,25 +8,20 @@ from telegram.ext import Application, CommandHandler
 from PIL import Image
 import io
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ВАЖНО: template_folder='.' заставляет Flask искать HTML прямо здесь, без папок
 app = Flask(__name__, template_folder='.')
 
-# --- КОНФИГУРАЦИЯ ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-# URL твоего приложения на Render (без слэша в конце). Пример: https://my-app.onrender.com
 WEBAPP_URL = os.getenv("WEBAPP_URL")
 
-# Настройка Gemini
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    # Используем новейшую модель 2.0 Flash
+    model = genai.GenerativeModel('gemini-2.0-flash')
 
-# Ленивая инициализация бота
 ptb_application = None
 
 async def get_ptb_application():
@@ -38,29 +33,19 @@ async def get_ptb_application():
         await ptb_application.start()
     return ptb_application
 
-# --- ЛОГИКА БОТА ---
 async def start_command(update: Update, context):
     if not WEBAPP_URL:
-        await update.message.reply_text("Ошибка: WEBAPP_URL не задан в настройках Render.")
+        await update.message.reply_text("Ошибка: WEBAPP_URL не задан.")
         return
-    
-    keyboard = [[InlineKeyboardButton("💬 Открыть чат", web_app=WebAppInfo(url=WEBAPP_URL))]]
-    await update.message.reply_text(
-        "Нажми кнопку, чтобы открыть чат с Gemini AI 👇",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-# --- ROUTES ---
+    keyboard = [[InlineKeyboardButton("✨ Открыть Gemini 2.0", web_app=WebAppInfo(url=WEBAPP_URL))]]
+    await update.message.reply_text("Нажми кнопку, чтобы войти в чат:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 @app.route('/')
 def index():
-    """Отдает HTML страницу"""
     return render_template('index.html')
 
 @app.route('/webhook', methods=['POST'])
 def telegram_webhook():
-    """Принимает сообщения от Telegram"""
-    if not TELEGRAM_TOKEN: return "No Token", 500
     async def process():
         ptb = await get_ptb_application()
         update = Update.de_json(request.get_json(force=True), ptb.bot)
@@ -68,38 +53,23 @@ def telegram_webhook():
     asyncio.run(process())
     return "OK"
 
-@app.route('/set_webhook', methods=['GET'])
+@app.route('/set_webhook')
 def set_webhook_route():
-    """Автоматическая установка вебхука (просто открой эту ссылку)"""
-    if not WEBAPP_URL or not TELEGRAM_TOKEN:
-        return "Ошибка: Не заданы WEBAPP_URL или TELEGRAM_TOKEN", 400
-    
-    webhook_url = f"{WEBAPP_URL}/webhook"
-    
     async def set_hook():
         ptb = await get_ptb_application()
-        await ptb.bot.set_webhook(webhook_url)
-        return f"Webhook успешно установлен на: {webhook_url}"
-    
-    try:
-        result = asyncio.run(set_hook())
-        return result
-    except Exception as e:
-        return f"Ошибка установки вебхука: {e}"
+        await ptb.bot.set_webhook(f"{WEBAPP_URL}/webhook")
+        return "Webhook set!"
+    return asyncio.run(set_hook())
 
 @app.route('/api/chat', methods=['POST'])
 def chat_api():
-    """Обработка запроса к Gemini"""
     user_msg = request.form.get('message', '')
     img_file = request.files.get('image')
-    
     parts = []
     if user_msg: parts.append(user_msg)
     if img_file:
         img = Image.open(io.BytesIO(img_file.read()))
         parts.append(img)
-
-    if not parts: return "Empty", 400
 
     def generate():
         try:
@@ -107,7 +77,7 @@ def chat_api():
             for chunk in response:
                 if chunk.text: yield chunk.text
         except Exception as e:
-            yield f"Error: {str(e)}"
+            yield f"Ошибка: {str(e)}"
 
     return Response(stream_with_context(generate()), content_type='text/plain')
 
