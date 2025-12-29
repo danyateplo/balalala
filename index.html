@@ -3,94 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Gemini iOS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
-        body { background-color: #000; color: #fff; font-family: -apple-system, system-ui, sans-serif; overflow: hidden; }
-        .ios-blur { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); background: rgba(20, 20, 20, 0.8); }
-        .bubble { max-width: 85%; padding: 12px 16px; border-radius: 20px; font-size: 16px; line-height: 1.4; }
+        body { background-color: #000; color: #fff; font-family: -apple-system, system-ui, sans-serif; }
+        .ios-blur { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); background: rgba(28, 28, 30, 0.7); }
+        .bubble { max-width: 85%; padding: 12px 16px; border-radius: 20px; font-size: 16px; margin-bottom: 8px; }
         .user { background: #007AFF; align-self: flex-end; border-bottom-right-radius: 4px; }
-        .bot { background: #1C1C1E; align-self: flex-start; border-bottom-left-radius: 4px; color: #E5E5E7; }
-        pre { background: #000 !important; padding: 10px; border-radius: 12px; margin: 8px 0; overflow-x: auto; border: 1px solid #333; }
-        .loading span { animation: blink 1.4s infinite; height: 6px; width: 6px; background: #8e8e93; display: inline-block; border-radius: 50%; margin: 0 2px; }
-        @keyframes blink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+        .bot { background: #2C2C2E; align-self: flex-start; border-bottom-left-radius: 4px; }
+        #chat::-webkit-scrollbar { display: none; }
     </style>
 </head>
-<body class="flex flex-col h-screen">
-    <header class="ios-blur fixed top-0 w-full z-20 border-b border-white/10 px-4 pt-10 pb-3 text-center">
-        <div class="flex justify-between items-center max-w-2xl mx-auto">
-            <button onclick="localStorage.clear(); location.reload();" class="text-[#007AFF] text-sm">Очистить</button>
-            <span class="font-semibold text-white">Gemini AI</span>
-            <div class="w-10"></div>
-        </div>
-    </header>
+<body class="flex flex-col h-screen overflow-hidden">
+    <header class="ios-blur fixed top-0 w-full z-20 pt-10 pb-3 border-b border-white/10 text-center font-bold">Gemini AI</header>
+    
+    <main id="chat" class="flex-1 overflow-y-auto p-4 pt-24 pb-32 flex flex-col"></main>
 
-    <main id="chat-container" class="flex-1 overflow-y-auto p-4 pt-28 pb-32 flex flex-col space-y-4"></main>
-
-    <footer class="ios-blur fixed bottom-0 w-full p-3 border-t border-white/10 pb-10">
-        <div class="max-w-2xl mx-auto flex items-end space-x-2">
-            <label class="p-2 mb-1 cursor-pointer">
-                <input type="file" id="f-in" class="hidden" accept="image/*" onchange="pv(this)">
-                <svg class="w-7 h-7 text-[#007AFF]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            </label>
-            <div class="flex-1 bg-[#1C1C1E] rounded-2xl p-2">
-                <img id="img-pv" class="hidden h-16 w-16 object-cover rounded-lg mb-2">
-                <textarea id="m-in" rows="1" class="w-full bg-transparent text-white px-2 outline-none resize-none text-[17px]" placeholder="Сообщение..."></textarea>
-            </div>
-            <button onclick="send()" class="bg-[#007AFF] p-3 rounded-full mb-1">
-                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-width="3"/></svg>
+    <footer class="ios-blur fixed bottom-0 w-full p-4 border-t border-white/10 pb-10">
+        <div class="flex items-end space-x-2 max-w-2xl mx-auto">
+            <button onclick="document.getElementById('f').click()" class="p-2 text-[#007AFF]">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" stroke-width="2"/></svg>
+                <input type="file" id="f" class="hidden" accept="image/*" onchange="up(this)">
             </button>
+            <div class="flex-1 bg-[#1C1C1E] rounded-2xl p-2 border border-white/5">
+                <img id="p" class="hidden h-16 w-16 object-cover rounded-lg mb-2">
+                <textarea id="i" rows="1" class="w-full bg-transparent outline-none resize-none text-[17px]" placeholder="Задать вопрос..."></textarea>
+            </div>
+            <button onclick="send()" class="bg-[#007AFF] p-3 rounded-full"><svg class="w-5 h-5" fill="none" stroke="white" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-width="3"/></svg></button>
         </div>
     </footer>
 
     <script>
-        const tg = window.Telegram.WebApp; tg.expand(); tg.headerColor = '#141414';
-        let history = JSON.parse(localStorage.getItem('h') || '[]');
-        let curImg = null;
+        const tg = window.Telegram.WebApp; tg.expand(); tg.headerColor = '#1c1c1e';
+        let h = JSON.parse(localStorage.getItem('h') || '[]');
+        let img = null;
 
-        function pv(i) {
-            const r = new FileReader(); r.onload = e => { curImg = e.target.result; const img = document.getElementById('img-pv'); img.src = curImg; img.classList.remove('hidden'); }; r.readAsDataURL(i.files[0]);
+        function up(input) {
+            const r = new FileReader(); r.onload = e => { img = e.target.result; document.getElementById('p').src = img; document.getElementById('p').classList.remove('hidden'); }; r.readAsDataURL(input.files[0]);
         }
 
         async function send() {
-            const i = document.getElementById('m-in'); const t = i.value.trim();
-            if(!t && !curImg) return;
-            addB(t, true, curImg); i.value = ''; document.getElementById('img-pv').classList.add('hidden');
-            const imgToSend = curImg; curImg = null;
-            const lId = addL();
+            const i = document.getElementById('i'); const t = i.value.trim();
+            if(!t && !img) return;
+            addB(t, true, img); i.value = ''; document.getElementById('p').classList.add('hidden');
+            const sentImg = img; img = null;
+            
             try {
                 const r = await fetch('/api/chat', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ message: t, image: imgToSend, history: history.map(h => ({role: h.role, parts: [{text: h.text}]})) })
+                    body: JSON.stringify({ message: t, image: sentImg, history: h })
                 });
-                const d = await r.json();
-                removeL(lId); addB(d.text, false);
-                history.push({role:'user', text:t}, {role:'model', text:d.text});
-                localStorage.setItem('h', JSON.stringify(history.slice(-10)));
-            } catch(e) { removeL(lId); addB("Ошибка API", false); }
+                const d = await r.json(); addB(d.text, false);
+                h.push({role:'user', parts:[{text:t}]}, {role:'model', parts:[{text:d.text}]});
+                localStorage.setItem('h', JSON.stringify(h.slice(-10)));
+            } catch(e) { addB("Ошибка API", false); }
         }
 
         function addB(t, u, im=null) {
-            const c = document.getElementById('chat-container');
-            const d = document.createElement('div'); d.className = `bubble ${u?'user':'bot'}`;
+            const c = document.getElementById('chat'); const d = document.createElement('div');
+            d.className = `bubble ${u?'user':'bot'}`;
             if(im) d.innerHTML += `<img src="${im}" class="rounded-lg mb-2 w-full">`;
             d.innerHTML += `<div>${u ? t : marked.parse(t)}</div>`;
             c.appendChild(d); c.scrollTop = c.scrollHeight;
-            d.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
         }
-
-        function addL() {
-            const id = Date.now(); const c = document.getElementById('chat-container');
-            const d = document.createElement('div'); d.id = id; d.className = 'bubble bot loading';
-            d.innerHTML = '<span></span><span></span><span></span>';
-            c.appendChild(d); c.scrollTop = c.scrollHeight; return id;
-        }
-        function removeL(id) { const e = document.getElementById(id); if(e) e.remove(); }
-        history.forEach(m => addB(m.text, m.role === 'user'));
+        h.forEach(m => addB(m.parts[0].text, m.role === 'user'));
     </script>
 </body>
 </html>
