@@ -1,5 +1,5 @@
 {
-  "name": "gemini-tg-mini-app",
+  "name": "gemini-tg-app",
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
@@ -8,7 +8,6 @@
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
     "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "path": "^0.12.7"
+    "cors": "^2.8.5"
   }
 }
